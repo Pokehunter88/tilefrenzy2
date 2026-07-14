@@ -20,9 +20,11 @@ export class Preloader extends Phaser.Scene {
             bar.width = 4 + (barWidth - 8) * progress;
         });
 
-        // Load your game assets here, e.g.:
-        // this.load.image('logo', 'assets/logo.png');
-        // this.load.spritesheet('tiles', 'assets/tiles.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.image('block1', 'assets/block1.png');
+        this.load.image('block2', 'assets/block2.png');
+        this.load.image('block3', 'assets/block3.png');
+        this.load.image('block4', 'assets/block4.png');
+        this.load.image('block5', 'assets/block5.png');
     }
 
     create() {

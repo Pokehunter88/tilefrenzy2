@@ -6,9 +6,14 @@ import { Game } from './scenes/Game.js';
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
+    // width: 1024,
+    // height: 768,
     width: 430,
     height: 220,
-    backgroundColor: '#1a1a1a',
+    pixelArt: true,
+    antialias: false,
+    roundPixels: true,
+    backgroundColor: '#5098d3',
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH

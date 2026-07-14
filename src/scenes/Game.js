@@ -1,21 +1,14 @@
 import Phaser from 'phaser';
 
 const COLS = 6;
-const ROWS = 12;          // visible rows
-const TILE = 48;
-const COLORS = [0xe74c3c, 0x2ecc71, 0x3498db, 0xf1c40f, 0x9b59b6, 0x1abc9c];
-const SCROLL_SPEED = 20;  // pixels per second
-const NEXT_ROW_SEED = 42;
+const ROWS = 10;
+const TILE = 20;
+const BLOCK_TYPES = ['block1', 'block2', 'block3', 'block4', 'block5'];
+const SCROLL_SPEED = 8; // pixels per second
 
-// Board origin (top-left of the visible grid)
-const BOARD_X = 1024 / 2 - (COLS * TILE) / 2;
-const BOARD_Y = 768 / 2 - (ROWS * TILE) / 2;
+const BOARD_X = Math.floor((430 - COLS * TILE) / 2);
+const BOARD_Y = Math.floor((220 - ROWS * TILE) / 2);
 
-function randomColor(rng) {
-    return COLORS[Math.floor(rng() * COLORS.length)];
-}
-
-// Simple seeded RNG (mulberry32)
 function makeRng(seed) {
     let s = seed;
     return () => {
@@ -26,6 +19,10 @@ function makeRng(seed) {
     };
 }
 
+function randomBlock(rng) {
+    return BLOCK_TYPES[Math.floor(rng() * BLOCK_TYPES.length)];
+}
+
 export class Game extends Phaser.Scene {
     constructor() {
         super('Game');
@@ -34,64 +31,69 @@ export class Game extends Phaser.Scene {
     create() {
         this.rng = makeRng(Date.now());
 
-        // grid[row][col] = { color } or null.  row 0 = bottom
         this.grid = [];
         for (let r = 0; r < ROWS + 2; r++) {
             this.grid[r] = Array(COLS).fill(null);
         }
-
-        // Pre-fill bottom 6 rows
-        for (let r = 0; r < 6; r++) {
+        for (let r = 0; r < 5; r++) {
             for (let c = 0; c < COLS; c++) {
-                this.grid[r][c] = { color: randomColor(this.rng) };
+                this.grid[r][c] = { type: randomBlock(this.rng) };
             }
         }
 
-        // Next row (hidden below board)
-        this.nextRow = Array.from({ length: COLS }, () => ({ color: randomColor(this.rng) }));
-
-        // Pixel scroll offset (0 = aligned, TILE = one row scrolled up)
+        this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
         this.scrollOffset = 0;
-        this.paused = false;
-        this.clearing = false;      // lock swaps during clear animation
-
-        // Cursor position (col = left of pair, row from bottom)
+        this.clearing = false;
         this.cursorCol = 2;
         this.cursorRow = 3;
 
-        // Graphics containers
-        this.tileGraphics = this.add.graphics();
+        // Mask so tiles don't render outside the board
+        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(BOARD_X, BOARD_Y, COLS * TILE, ROWS * TILE);
+        const mask = maskShape.createGeometryMask();
+
+        // Container holds all tile sprites; apply mask to it
+        this.tileContainer = this.add.container(0, 0).setMask(mask);
+
+        // Sprite pool: (ROWS + 1) rows * COLS cols
+        this.spritePool = [];
+        const totalSprites = (ROWS + 1) * COLS;
+        for (let i = 0; i < totalSprites; i++) {
+            const img = this.add.image(0, 0, 'block1')
+                .setOrigin(0, 0)
+                .setScale(1)
+                .setVisible(false);
+            this.tileContainer.add(img);
+            this.spritePool.push(img);
+        }
+
+        // Cursor graphics (on top of container, no mask needed)
         this.cursorGfx = this.add.graphics();
+
+        // Board border
+        const borderGfx = this.add.graphics();
+        borderGfx.lineStyle(3, 0xffffff, 0.6);
+        borderGfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
 
         // Score
         this.score = 0;
-        this.scoreText = this.add.text(BOARD_X + COLS * TILE + 20, BOARD_Y, 'SCORE\n0', {
-            fontFamily: 'monospace', fontSize: 22, color: '#ffffff', align: 'center'
+        this.scoreText = this.add.text(BOARD_X + COLS * TILE + 8, BOARD_Y, 'SCORE\n0', {
+            fontFamily: 'monospace', fontSize: 8, color: '#ffffff', align: 'center'
         });
 
-        // Input
         const kb = this.input.keyboard;
-        this.keys = kb.addKeys({
-            up:    Phaser.Input.Keyboard.KeyCodes.UP,
-            down:  Phaser.Input.Keyboard.KeyCodes.DOWN,
-            left:  Phaser.Input.Keyboard.KeyCodes.LEFT,
-            right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-            swap:  Phaser.Input.Keyboard.KeyCodes.Z,
-            raise: Phaser.Input.Keyboard.KeyCodes.X,
-        });
-
         kb.on('keydown-UP',    () => this.moveCursor(0, 1));
         kb.on('keydown-DOWN',  () => this.moveCursor(0, -1));
         kb.on('keydown-LEFT',  () => this.moveCursor(-1, 0));
         kb.on('keydown-RIGHT', () => this.moveCursor(1, 0));
+        kb.on('keydown-W',    () => this.moveCursor(0, 1));
+        kb.on('keydown-S',  () => this.moveCursor(0, -1));
+        kb.on('keydown-A',  () => this.moveCursor(-1, 0));
+        kb.on('keydown-D', () => this.moveCursor(1, 0));
+        kb.on('keydown-SPACE',     () => this.doSwap());
         kb.on('keydown-Z',     () => this.doSwap());
         kb.on('keydown-X',     () => { this.scrollOffset += TILE; });
-
-        // Instructions
-        this.add.text(BOARD_X, BOARD_Y + ROWS * TILE + 8,
-            'Arrows: move  Z: swap  X: raise',
-            { fontFamily: 'monospace', fontSize: 14, color: '#aaaaaa' }
-        );
 
         this.drawBoard();
     }
@@ -108,10 +110,23 @@ export class Game extends Phaser.Scene {
         const tmp = this.grid[r][c];
         this.grid[r][c] = this.grid[r][c + 1];
         this.grid[r][c + 1] = tmp;
+        this.applyGravity();
         this.checkMatches();
     }
 
-    // Scroll the board up by delta pixels; when a full tile is scrolled, shift grid
+    applyGravity() {
+        for (let c = 0; c < COLS; c++) {
+            // Compact column downward: collect non-null tiles then repack from row 0 up
+            const tiles = [];
+            for (let r = 0; r < ROWS; r++) {
+                if (this.grid[r][c]) tiles.push(this.grid[r][c]);
+            }
+            for (let r = 0; r < ROWS; r++) {
+                this.grid[r][c] = r < tiles.length ? tiles[r] : null;
+            }
+        }
+    }
+
     scrollBoard(delta) {
         this.scrollOffset += delta;
         while (this.scrollOffset >= TILE) {
@@ -121,32 +136,23 @@ export class Game extends Phaser.Scene {
     }
 
     shiftGridUp() {
-        // Move every row up by one index (row 0 disappears off top is wrong —
-        // in Tetris Attack rows rise from the bottom, so we push a new bottom row)
-        // Shift all rows up by one slot
         for (let r = ROWS; r > 0; r--) {
             this.grid[r] = this.grid[r - 1];
         }
-        // Insert the prepared next row at the bottom
         this.grid[0] = this.nextRow;
-        // Generate a fresh next row
-        this.nextRow = Array.from({ length: COLS }, () => ({ color: randomColor(this.rng) }));
-        // Push cursor up too so it stays in the same visual spot
+        this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
         if (this.cursorRow < ROWS - 1) this.cursorRow++;
     }
 
     checkMatches() {
         const toRemove = new Set();
 
-        // Horizontal runs
         for (let r = 0; r < ROWS; r++) {
             let run = 1;
             for (let c = 1; c < COLS; c++) {
-                const a = this.grid[r][c - 1];
-                const b = this.grid[r][c];
-                if (a && b && a.color === b.color) {
-                    run++;
-                } else {
+                const a = this.grid[r][c - 1], b = this.grid[r][c];
+                if (a && b && a.type === b.type) { run++; }
+                else {
                     if (run >= 3) for (let i = c - run; i < c; i++) toRemove.add(`${r},${i}`);
                     run = 1;
                 }
@@ -154,15 +160,12 @@ export class Game extends Phaser.Scene {
             if (run >= 3) for (let i = COLS - run; i < COLS; i++) toRemove.add(`${r},${i}`);
         }
 
-        // Vertical runs
         for (let c = 0; c < COLS; c++) {
             let run = 1;
             for (let r = 1; r < ROWS; r++) {
-                const a = this.grid[r - 1][c];
-                const b = this.grid[r][c];
-                if (a && b && a.color === b.color) {
-                    run++;
-                } else {
+                const a = this.grid[r - 1][c], b = this.grid[r][c];
+                if (a && b && a.type === b.type) { run++; }
+                else {
                     if (run >= 3) for (let i = r - run; i < r; i++) toRemove.add(`${i},${c}`);
                     run = 1;
                 }
@@ -176,7 +179,6 @@ export class Game extends Phaser.Scene {
         this.score += toRemove.size * 10;
         this.scoreText.setText(`SCORE\n${this.score}`);
 
-        // Flash cleared tiles then remove
         const flashKeys = [...toRemove];
         let flashCount = 0;
         const flashTimer = this.time.addEvent({
@@ -195,7 +197,9 @@ export class Game extends Phaser.Scene {
                         const [r, c] = key.split(',').map(Number);
                         this.grid[r][c] = null;
                     });
+                    this.applyGravity();
                     this.clearing = false;
+                    this.checkMatches();
                     this.drawBoard();
                 }
             }
@@ -203,36 +207,36 @@ export class Game extends Phaser.Scene {
     }
 
     drawBoard() {
-        const gfx = this.tileGraphics;
-        gfx.clear();
-
         const off = this.scrollOffset;
+        let spriteIdx = 0;
 
-        // Draw next (hidden) row peeking from bottom
+        // Next (peek) row at the bottom
         for (let c = 0; c < COLS; c++) {
             const tile = this.nextRow[c];
-            if (!tile) continue;
             const px = BOARD_X + c * TILE;
             const py = BOARD_Y + ROWS * TILE - off;
-            this.drawTile(gfx, px, py, tile.color, false);
+            const img = this.spritePool[spriteIdx++];
+            img.setPosition(px, py).setVisible(true).setTexture(tile.type).clearTint().setAlpha(1);
         }
 
-        // Draw visible grid rows (row 0 = bottom visual row)
+        // Grid rows
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const tile = this.grid[r][c];
-                if (!tile) continue;
+                const img = this.spritePool[spriteIdx++];
+                if (!tile) { img.setVisible(false); continue; }
                 const px = BOARD_X + c * TILE;
-                // Visual y: row 0 is at the bottom
                 const py = BOARD_Y + (ROWS - 1 - r) * TILE - off;
-                if (py + TILE <= BOARD_Y) continue; // clipped above board
-                this.drawTile(gfx, px, py, tile.color, tile._flash);
+                img.setPosition(px, py).setVisible(true).setTexture(tile.type);
+                if (tile._flash) { img.setTint(0xffffff); } else { img.clearTint(); }
+                img.setAlpha(1);
             }
         }
 
-        // Board border
-        gfx.lineStyle(3, 0xffffff, 0.6);
-        gfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
+        // Hide any remaining pooled sprites
+        for (; spriteIdx < this.spritePool.length; spriteIdx++) {
+            this.spritePool[spriteIdx].setVisible(false);
+        }
 
         // Cursor
         const cur = this.cursorGfx;
@@ -243,20 +247,8 @@ export class Game extends Phaser.Scene {
         cur.strokeRect(cx + 1, cy + 1, TILE * 2 - 2, TILE - 2);
     }
 
-    drawTile(gfx, px, py, color, flash) {
-        const fill = flash ? 0xffffff : color;
-        gfx.fillStyle(fill, 1);
-        gfx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
-        // border
-        gfx.lineStyle(2, 0x000000, 0.4);
-        gfx.strokeRect(px + 2, py + 2, TILE - 4, TILE - 4);
-        // shine
-        gfx.fillStyle(0xffffff, 0.25);
-        gfx.fillRect(px + 4, py + 4, TILE - 10, 6);
-    }
-
     update(_time, delta) {
-        if (this.paused || this.clearing) return;
+        if (this.clearing) return;
         this.scrollBoard((SCROLL_SPEED / 1000) * delta);
         this.drawBoard();
     }
