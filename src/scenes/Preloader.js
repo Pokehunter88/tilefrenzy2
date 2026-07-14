@@ -25,9 +25,13 @@ export class Preloader extends Phaser.Scene {
         this.load.image('block3', 'assets/block3.png');
         this.load.image('block4', 'assets/block4.png');
         this.load.image('block5', 'assets/block5.png');
+        this.load.image('cursor1', 'assets/cursor1.png');
+        this.load.image('cursor2', 'assets/cursor2.png');
     }
 
     create() {
-        this.scene.start('Game');
+        document.fonts.load('16px "Press Start 2P"').then(() => {
+            this.scene.start('Game');
+        });
     }
 }

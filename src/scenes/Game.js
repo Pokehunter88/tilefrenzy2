@@ -63,8 +63,17 @@ export class Game extends Phaser.Scene {
             this.spritePool.push(img);
         }
 
-        // Cursor graphics (on top of container, no mask needed)
-        this.cursorGfx = this.add.graphics();
+        // Cursor sprite — image is 80x60 with cursor centred
+        this.cursorSprite = this.add.image(0, 0, 'cursor1').setOrigin(0.5, 0.5).setDisplaySize(80, 60);
+        this.cursorFrame = 0;
+        this.time.addEvent({
+            delay: 200,
+            loop: true,
+            callback: () => {
+                this.cursorFrame = 1 - this.cursorFrame;
+                this.cursorSprite.setTexture(this.cursorFrame === 0 ? 'cursor1' : 'cursor2');
+            }
+        });
 
         // Board border
         const borderGfx = this.add.graphics();
@@ -96,7 +105,7 @@ export class Game extends Phaser.Scene {
 
     moveCursor(dc, dr) {
         this.cursorCol = Phaser.Math.Clamp(this.cursorCol + dc, 0, COLS - 2);
-        this.cursorRow = Phaser.Math.Clamp(this.cursorRow + dr, 0, ROWS - 1);
+        this.cursorRow = Phaser.Math.Clamp(this.cursorRow + dr, 0, ROWS - 2);
     }
 
     doSwap() {
@@ -140,7 +149,7 @@ export class Game extends Phaser.Scene {
                 onDone();
             }
         };
-        this.time.delayedCall(100, step);
+        this.time.delayedCall(150, step);
     }
 
     scrollBoard(delta) {
@@ -157,7 +166,7 @@ export class Game extends Phaser.Scene {
         }
         this.grid[0] = this.nextRow;
         this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
-        if (this.cursorRow < ROWS - 1) this.cursorRow++;
+        if (this.cursorRow < ROWS - 2) this.cursorRow++;
         if (!this.clearing) this.checkMatches();
     }
 
@@ -309,15 +318,11 @@ export class Game extends Phaser.Scene {
             this.spritePool[spriteIdx].setVisible(false);
         }
 
-        // Cursor
-        const cur = this.cursorGfx;
-        cur.clear();
-        const cx = BOARD_X + this.cursorCol * TILE;
-        const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE - off;
-        if (cy >= boardTop && cy + TILE <= boardBottom) {
-            cur.lineStyle(3, 0xffffff, 1);
-            cur.strokeRect(cx + 1, cy + 1, TILE * 2 - 2, TILE - 2);
-        }
+        // Cursor — centre of the two tiles the cursor spans
+        const cx = BOARD_X + this.cursorCol * TILE + TILE;
+        const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE + TILE / 2 - off;
+        this.cursorSprite.setPosition(cx, cy);
+        this.cursorSprite.setVisible(cy >= boardTop && cy <= boardBottom);
     }
 
     update(_time, delta) {
