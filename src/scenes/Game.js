@@ -47,14 +47,8 @@ export class Game extends Phaser.Scene {
         this.cursorCol = 2;
         this.cursorRow = 3;
 
-        // Mask so tiles don't render outside the board
-        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
-        maskShape.fillStyle(0xffffff);
-        maskShape.fillRect(BOARD_X, BOARD_Y, COLS * TILE, ROWS * TILE);
-        const mask = maskShape.createGeometryMask();
-
         // Container holds all tile sprites; apply mask to it
-        this.tileContainer = this.add.container(0, 0).setMask(mask);
+        this.tileContainer = this.add.container(0, 0);
 
         // Sprite pool: (ROWS + 1) rows * COLS cols
         this.spritePool = [];
@@ -208,15 +202,29 @@ export class Game extends Phaser.Scene {
 
     drawBoard() {
         const off = this.scrollOffset;
+        const boardTop = BOARD_Y;
+        const boardBottom = BOARD_Y + ROWS * TILE;
         let spriteIdx = 0;
+
+        const place = (img, px, py, type, flash) => {
+            if (py >= boardBottom || py + TILE <= boardTop) {
+                img.setVisible(false);
+                return;
+            }
+            const cropY = Math.max(0, boardTop - py);
+            const cropH = Math.min(TILE, boardBottom - py) - cropY;
+            img.setTexture(type);
+            img.setCrop(0, cropY, TILE, cropH);
+            img.setPosition(px, py).setVisible(true);
+            if (flash) { img.setTint(0xffffff); } else { img.clearTint(); }
+        };
 
         // Next (peek) row at the bottom
         for (let c = 0; c < COLS; c++) {
             const tile = this.nextRow[c];
             const px = BOARD_X + c * TILE;
             const py = BOARD_Y + ROWS * TILE - off;
-            const img = this.spritePool[spriteIdx++];
-            img.setPosition(px, py).setVisible(true).setTexture(tile.type).clearTint().setAlpha(1);
+            place(this.spritePool[spriteIdx++], px, py, tile.type, false);
         }
 
         // Grid rows
@@ -227,9 +235,7 @@ export class Game extends Phaser.Scene {
                 if (!tile) { img.setVisible(false); continue; }
                 const px = BOARD_X + c * TILE;
                 const py = BOARD_Y + (ROWS - 1 - r) * TILE - off;
-                img.setPosition(px, py).setVisible(true).setTexture(tile.type);
-                if (tile._flash) { img.setTint(0xffffff); } else { img.clearTint(); }
-                img.setAlpha(1);
+                place(img, px, py, tile.type, tile._flash);
             }
         }
 
@@ -243,8 +249,10 @@ export class Game extends Phaser.Scene {
         cur.clear();
         const cx = BOARD_X + this.cursorCol * TILE;
         const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE - off;
-        cur.lineStyle(3, 0xffffff, 1);
-        cur.strokeRect(cx + 1, cy + 1, TILE * 2 - 2, TILE - 2);
+        if (cy >= boardTop && cy + TILE <= boardBottom) {
+            cur.lineStyle(3, 0xffffff, 1);
+            cur.strokeRect(cx + 1, cy + 1, TILE * 2 - 2, TILE - 2);
+        }
     }
 
     update(_time, delta) {
