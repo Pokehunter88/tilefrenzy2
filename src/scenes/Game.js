@@ -90,6 +90,7 @@ export class Game extends Phaser.Scene {
         kb.on('keydown-X',     () => { this.scrollOffset += TILE; });
 
         this.drawBoard();
+        this.checkMatches();
     }
 
     moveCursor(dc, dr) {
@@ -136,6 +137,7 @@ export class Game extends Phaser.Scene {
         this.grid[0] = this.nextRow;
         this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
         if (this.cursorRow < ROWS - 1) this.cursorRow++;
+        if (!this.clearing) this.checkMatches();
     }
 
     checkMatches() {
@@ -174,30 +176,33 @@ export class Game extends Phaser.Scene {
         this.scoreText.setText(`SCORE\n${this.score}`);
 
         const flashKeys = [...toRemove];
-        let flashCount = 0;
-        const flashTimer = this.time.addEvent({
-            delay: 80,
-            repeat: 5,
-            callback: () => {
-                flashCount++;
+        let flashOn = true;
+        let ticks = 0;
+        const totalTicks = 10;
+
+        const doFlash = () => {
+            flashOn = !flashOn;
+            ticks++;
+            flashKeys.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                if (this.grid[r][c]) this.grid[r][c]._flash = flashOn;
+            });
+            this.drawBoard();
+            if (ticks < totalTicks) {
+                this.time.delayedCall(40, doFlash);
+            } else {
                 flashKeys.forEach(key => {
                     const [r, c] = key.split(',').map(Number);
-                    if (this.grid[r][c]) this.grid[r][c]._flash = flashCount % 2 === 0;
+                    this.grid[r][c] = null;
                 });
+                this.applyGravity();
+                this.clearing = false;
+                this.checkMatches();
                 this.drawBoard();
-                if (flashCount >= 6) {
-                    flashTimer.remove();
-                    flashKeys.forEach(key => {
-                        const [r, c] = key.split(',').map(Number);
-                        this.grid[r][c] = null;
-                    });
-                    this.applyGravity();
-                    this.clearing = false;
-                    this.checkMatches();
-                    this.drawBoard();
-                }
             }
-        });
+        };
+
+        doFlash();
     }
 
     drawBoard() {
@@ -213,10 +218,15 @@ export class Game extends Phaser.Scene {
             }
             const cropY = Math.max(0, boardTop - py);
             const cropH = Math.min(TILE, boardBottom - py) - cropY;
+            const croppedBottom = py + TILE > boardBottom;
             img.setTexture(type);
             img.setCrop(0, cropY, TILE, cropH);
             img.setPosition(px, py).setVisible(true);
-            if (flash) { img.setTint(0xffffff); } else { img.clearTint(); }
+            if (flash) {
+                img.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+            }
+            else if (croppedBottom) { img.setTint(0x555555); }
+            else { img.clearTint(); }
         };
 
         // Next (peek) row at the bottom
