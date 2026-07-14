@@ -5,7 +5,8 @@ export default defineConfig({
     publicDir: '../public',
     server: {
         port: 8080,
-        open: true
+        open: true,
+        allowedHosts: ['crawdad-mature-implicitly.ngrok-free.app']
     },
     build: {
         outDir: '../dist',

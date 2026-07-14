@@ -6,8 +6,8 @@ import { Game } from './scenes/Game.js';
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
-    width: 1024,
-    height: 768,
+    width: 430,
+    height: 220,
     backgroundColor: '#1a1a1a',
     scale: {
         mode: Phaser.Scale.FIT,

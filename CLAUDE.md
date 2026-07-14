@@ -1,0 +1,1 @@
+Never run the website unless asked that includes npm run dev and vite
