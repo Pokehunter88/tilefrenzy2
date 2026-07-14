@@ -74,7 +74,7 @@ export class Game extends Phaser.Scene {
         // Score
         this.score = 0;
         this.scoreText = this.add.text(BOARD_X + COLS * TILE + 8, BOARD_Y, 'SCORE\n0', {
-            fontFamily: 'monospace', fontSize: 8, color: '#ffffff', align: 'center'
+            fontFamily: '"Press Start 2P"', fontSize: '16px', color: '#ffffff', align: 'center', resolution: 5
         });
 
         const kb = this.input.keyboard;

@@ -28,4 +28,10 @@ const config = {
     scene: [Boot, Preloader, Game]
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+game.events.once('ready', () => {
+    const canvas = game.canvas;
+    canvas.style.setProperty('image-rendering', 'pixelated', 'important');
+    canvas.style.setProperty('image-rendering', 'crisp-edges', 'important');
+});
