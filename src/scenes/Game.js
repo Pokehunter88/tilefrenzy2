@@ -44,6 +44,7 @@ export class Game extends Phaser.Scene {
         this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
         this.scrollOffset = 0;
         this.clearing = false;
+        this.falling = false;
         this.cursorCol = 2;
         this.cursorRow = 3;
 
@@ -67,7 +68,7 @@ export class Game extends Phaser.Scene {
 
         // Board border
         const borderGfx = this.add.graphics();
-        borderGfx.lineStyle(3, 0xffffff, 0.6);
+        borderGfx.lineStyle(3, 0xffffff, 1);
         borderGfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
 
         // Score
@@ -99,27 +100,47 @@ export class Game extends Phaser.Scene {
     }
 
     doSwap() {
-        if (this.clearing) return;
+        if (this.clearing || this.falling) return;
         const r = this.cursorRow;
         const c = this.cursorCol;
         const tmp = this.grid[r][c];
         this.grid[r][c] = this.grid[r][c + 1];
         this.grid[r][c + 1] = tmp;
-        this.applyGravity();
-        this.checkMatches();
+        this.startGravity(() => this.checkMatches());
     }
 
-    applyGravity() {
-        for (let c = 0; c < COLS; c++) {
-            // Compact column downward: collect non-null tiles then repack from row 0 up
-            const tiles = [];
-            for (let r = 0; r < ROWS; r++) {
-                if (this.grid[r][c]) tiles.push(this.grid[r][c]);
-            }
-            for (let r = 0; r < ROWS; r++) {
-                this.grid[r][c] = r < tiles.length ? tiles[r] : null;
+    // Returns true if any block moved down one row
+    gravityStep(dontMove) {
+        let moved = false;
+        // Iterate from row 1 upward so blocks cascade naturally
+        for (let r = 1; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (this.grid[r][c] && !this.grid[r - 1][c]) {
+                    if (dontMove) return true;
+                    this.grid[r - 1][c] = this.grid[r][c];
+                    this.grid[r][c] = null;
+                    moved = true;
+                }
             }
         }
+        return moved;
+    }
+
+    startGravity(onDone) {
+        if (!this.gravityStep(true)) { onDone(); return; }
+        this.falling = true;
+        this.drawBoard();
+        const step = () => {
+            if (this.gravityStep()) {
+                this.drawBoard();
+                this.time.delayedCall(30, step);
+            } else {
+                this.falling = false;
+                this.drawBoard();
+                onDone();
+            }
+        };
+        this.time.delayedCall(100, step);
     }
 
     scrollBoard(delta) {
@@ -172,13 +193,34 @@ export class Game extends Phaser.Scene {
         if (toRemove.size === 0) return;
 
         this.clearing = true;
-        this.score += toRemove.size * 10;
+
+        let scoreToAdd = 0;
+
+        if (toRemove.size == 4) {
+            scoreToAdd = 20;
+        } else if (toRemove.size == 5) {
+            scoreToAdd = 40;
+        } else if (toRemove.size == 6) {
+            scoreToAdd = 50;
+        }
+
+        this.score += toRemove.size * 10 + scoreToAdd;
+
         this.scoreText.setText(`SCORE\n${this.score}`);
 
         const flashKeys = [...toRemove];
+
+        // Mark all as flashing
+        flashKeys.forEach(key => {
+            const [r, c] = key.split(',').map(Number);
+            if (this.grid[r][c]) this.grid[r][c]._flash = true;
+        });
+        this.drawBoard();
+
+        // Flicker phase
         let flashOn = true;
         let ticks = 0;
-        const totalTicks = 10;
+        const totalTicks = 8;
 
         const doFlash = () => {
             flashOn = !flashOn;
@@ -189,17 +231,30 @@ export class Game extends Phaser.Scene {
             });
             this.drawBoard();
             if (ticks < totalTicks) {
-                this.time.delayedCall(40, doFlash);
+                this.time.delayedCall(50, doFlash);
             } else {
+                // Make sure all are flashing white before pop phase
                 flashKeys.forEach(key => {
                     const [r, c] = key.split(',').map(Number);
-                    this.grid[r][c] = null;
+                    if (this.grid[r][c]) this.grid[r][c]._flash = true;
                 });
-                this.applyGravity();
-                this.clearing = false;
-                this.checkMatches();
                 this.drawBoard();
+                this.time.delayedCall(100, doPopping);
             }
+        };
+
+        // Pop phase — remove one block at a time
+        const doPopping = () => {
+            if (flashKeys.length === 0) {
+                this.clearing = false;
+                this.startGravity(() => this.checkMatches());
+                return;
+            }
+            const key = flashKeys.shift();
+            const [r, c] = key.split(',').map(Number);
+            this.grid[r][c] = null;
+            this.drawBoard();
+            this.time.delayedCall(100, doPopping);
         };
 
         doFlash();
@@ -266,7 +321,7 @@ export class Game extends Phaser.Scene {
     }
 
     update(_time, delta) {
-        if (this.clearing) return;
+        if (this.clearing || this.falling) return;
         this.scrollBoard((SCROLL_SPEED / 1000) * delta);
         this.drawBoard();
     }
