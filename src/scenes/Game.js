@@ -4,7 +4,7 @@ const COLS = 6;
 const ROWS = 10;
 const TILE = 20;
 const BLOCK_TYPES = ['block1', 'block2', 'block3', 'block4', 'block5'];
-const SCROLL_SPEED = 8; // pixels per second
+const SCROLL_SPEED = 0.33; // pixels per second
 
 const BOARD_X = Math.floor((430 - COLS * TILE) / 2);
 const BOARD_Y = Math.floor((220 - ROWS * TILE) / 2);
@@ -80,27 +80,45 @@ export class Game extends Phaser.Scene {
         borderGfx.lineStyle(3, 0xffffff, 1);
         borderGfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
 
-        // Score
+        // Score & speed
         this.score = 0;
-        this.scoreText = this.add.text(BOARD_X + COLS * TILE + 8, BOARD_Y, 'SCORE\n0', {
-            fontFamily: '"Press Start 2P"', fontSize: '16px', color: '#ffffff', align: 'center', resolution: 5
-        });
+        this.speedLevel = 1;
+        const textX = BOARD_X + COLS * TILE + 8;
+        const textStyle = { fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ffffff', align: 'center', resolution: 5 };
+        this.scoreText = this.add.text(textX, BOARD_Y, 'SCORE\n0', textStyle);
+        this.speedText = this.add.text(textX, BOARD_Y + 30, 'SPEED\n1', textStyle);
+
+        // Increase speed level every 30 seconds
+        // this.time.addEvent({
+        //     delay: 30000,
+        //     loop: true,
+        //     callback: () => {
+        //         this.speedLevel++;
+        //         this.speedText.setText(`SPEED\n${this.speedLevel}`);
+        //     }
+        // });
 
         const kb = this.input.keyboard;
-        kb.on('keydown-UP',    () => this.moveCursor(0, 1));
-        kb.on('keydown-DOWN',  () => this.moveCursor(0, -1));
-        kb.on('keydown-LEFT',  () => this.moveCursor(-1, 0));
+        kb.on('keydown-UP', () => this.moveCursor(0, 1));
+        kb.on('keydown-DOWN', () => this.moveCursor(0, -1));
+        kb.on('keydown-LEFT', () => this.moveCursor(-1, 0));
         kb.on('keydown-RIGHT', () => this.moveCursor(1, 0));
-        kb.on('keydown-W',    () => this.moveCursor(0, 1));
-        kb.on('keydown-S',  () => this.moveCursor(0, -1));
-        kb.on('keydown-A',  () => this.moveCursor(-1, 0));
+        kb.on('keydown-W', () => this.moveCursor(0, 1));
+        kb.on('keydown-S', () => this.moveCursor(0, -1));
+        kb.on('keydown-A', () => this.moveCursor(-1, 0));
         kb.on('keydown-D', () => this.moveCursor(1, 0));
-        kb.on('keydown-SPACE',     () => this.doSwap());
-        kb.on('keydown-Z',     () => this.doSwap());
-        kb.on('keydown-X',     () => { this.scrollOffset += TILE; });
+        kb.on('keydown-SPACE', () => this.doSwap());
+        kb.on('keydown-F', () => { this.scrollOffset += TILE; });
+        kb.on('keydown-E', () => this.changeSpeed(1));
+        kb.on('keydown-Q', () => this.changeSpeed(-1));
 
         this.drawBoard();
         this.checkMatches();
+    }
+
+    changeSpeed(amount) {
+        this.speedLevel += amount;
+        this.speedText.setText(`SPEED\n${this.speedLevel}`);
     }
 
     moveCursor(dc, dr) {
@@ -327,7 +345,7 @@ export class Game extends Phaser.Scene {
 
     update(_time, delta) {
         if (this.clearing || this.falling) return;
-        this.scrollBoard((SCROLL_SPEED / 1000) * delta);
+        this.scrollBoard(((SCROLL_SPEED + this.speedLevel) / 1000) * delta);
         this.drawBoard();
     }
 }
