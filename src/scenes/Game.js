@@ -4,7 +4,7 @@ const COLS = 6;
 const ROWS = 10;
 const TILE = 20;
 const BLOCK_TYPES = ['block1', 'block2', 'block3', 'block4', 'block5'];
-const SCROLL_SPEED = 0.33; // pixels per second
+const SCROLL_SPEED = 1.33; // pixels per second
 
 const BOARD_X = Math.floor((430 - COLS * TILE) / 2);
 const BOARD_Y = Math.floor((220 - ROWS * TILE) / 2);
@@ -37,7 +37,18 @@ export class Game extends Phaser.Scene {
         }
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < COLS; c++) {
-                this.grid[r][c] = { type: randomBlock(this.rng) };
+                let type;
+                let attempts = 0;
+                do {
+                    type = randomBlock(this.rng);
+                    attempts++;
+                } while (attempts < 100 && (
+                    // Check horizontal: two to the left match
+                    (c >= 2 && this.grid[r][c-1]?.type === type && this.grid[r][c-2]?.type === type) ||
+                    // Check vertical: two below match
+                    (r >= 2 && this.grid[r-1][c]?.type === type && this.grid[r-2][c]?.type === type)
+                ));
+                this.grid[r][c] = { type };
             }
         }
 
@@ -83,6 +94,7 @@ export class Game extends Phaser.Scene {
         // Score & speed
         this.score = 0;
         this.speedLevel = 1;
+        this.scrollSpeed = SCROLL_SPEED * 1.0684**(this.speedLevel - 1);
         const textX = BOARD_X + COLS * TILE + 8;
         const textStyle = { fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ffffff', align: 'center', resolution: 5 };
         this.scoreText = this.add.text(textX, BOARD_Y, 'SCORE\n0', textStyle);
@@ -119,6 +131,7 @@ export class Game extends Phaser.Scene {
     changeSpeed(amount) {
         this.speedLevel += amount;
         this.speedText.setText(`SPEED\n${this.speedLevel}`);
+        this.scrollSpeed = SCROLL_SPEED * 1.0684**(this.speedLevel - 1)
     }
 
     moveCursor(dc, dr) {
@@ -235,6 +248,10 @@ export class Game extends Phaser.Scene {
 
         this.scoreText.setText(`SCORE\n${this.score}`);
 
+        if (this.score / 100 >= this.speedLevel) {
+            this.changeSpeed(1);
+        }
+
         const flashKeys = [...toRemove];
 
         // Mark all as flashing
@@ -266,7 +283,7 @@ export class Game extends Phaser.Scene {
                     if (this.grid[r][c]) this.grid[r][c]._flash = true;
                 });
                 this.drawBoard();
-                this.time.delayedCall(100, doPopping);
+                this.time.delayedCall(300, doPopping);
             }
         };
 
@@ -345,7 +362,7 @@ export class Game extends Phaser.Scene {
 
     update(_time, delta) {
         if (this.clearing || this.falling) return;
-        this.scrollBoard(((SCROLL_SPEED + this.speedLevel) / 1000) * delta);
+        this.scrollBoard((this.scrollSpeed / 1000) * delta);
         this.drawBoard();
     }
 }
