@@ -35,11 +35,138 @@
             image-rendering: pixelated !important;
             image-rendering: crisp-edges !important;
         }
+
+        #touch-controls {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 20px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        @media (pointer: coarse) {
+            #touch-controls { display: flex; }
+        }
+
+        #dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 52px);
+            grid-template-rows: repeat(3, 52px);
+            gap: 4px;
+            pointer-events: all;
+        }
+
+        .dpad-btn {
+            width: 52px;
+            height: 52px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 10px;
+            color: white;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .dpad-btn:active {
+            background: rgba(255, 255, 255, 0.35);
+        }
+
+        #action-btns {
+            pointer-events: all;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #btn-swap {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 80, 80, 0.25);
+            border: 2px solid rgba(255, 80, 80, 0.6);
+            border-radius: 50%;
+            color: white;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            cursor: pointer;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #btn-swap:active {
+            background: rgba(255, 80, 80, 0.55);
+        }
     </style>
 </head>
 
 <body>
     <div id="game-container"></div>
+
+    <div id="touch-controls">
+        <div id="dpad">
+            <div></div>
+            <div class="dpad-btn" id="btn-up">▲</div>
+            <div></div>
+            <div class="dpad-btn" id="btn-left">◀</div>
+            <div></div>
+            <div class="dpad-btn" id="btn-right">▶</div>
+            <div></div>
+            <div class="dpad-btn" id="btn-down">▼</div>
+            <div></div>
+        </div>
+        <div id="action-btns">
+            <div id="btn-swap">SWAP</div>
+        </div>
+    </div>
+
+    <script>
+        const held = {};
+
+        function startHold(id, fn) {
+            if (held[id]) return;
+            fn();
+            held[id] = setInterval(fn, 150);
+        }
+
+        function stopHold(id) {
+            clearInterval(held[id]);
+            delete held[id];
+        }
+
+        function dpad(id, dc, dr) {
+            const el = document.getElementById(id);
+            el.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startHold(id, () => window.tileGame?.moveCursor(dc, dr));
+            }, { passive: false });
+            el.addEventListener('touchend',   (e) => { e.preventDefault(); stopHold(id); }, { passive: false });
+            el.addEventListener('touchcancel', () => stopHold(id));
+        }
+
+        dpad('btn-up',    0,  1);
+        dpad('btn-down',  0, -1);
+        dpad('btn-left', -1,  0);
+        dpad('btn-right', 1,  0);
+
+        const swap = document.getElementById('btn-swap');
+        swap.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            window.tileGame?.doSwap();
+        }, { passive: false });
+    </script>
+
     <script type="module" src="./main.js"></script>
 </body>
 

@@ -203,6 +203,8 @@ export class Game extends Phaser.Scene {
 
         this.drawBoard();
         this.checkMatches();
+
+        window.tileGame = this;
     }
 
     changeSpeed(amount) {
