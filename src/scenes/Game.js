@@ -47,6 +47,8 @@ export class Game extends Phaser.Scene {
     }
 
     create() {
+        this.add.image(430 / 2, 220 / 2, 'background').setDisplaySize(430, 220);
+
         this.rng = makeRng(Date.now());
 
         this.grid = [];
@@ -102,18 +104,18 @@ export class Game extends Phaser.Scene {
         });
 
         // Board border
-        const borderGfx = this.add.graphics();
-        borderGfx.lineStyle(3, 0xffffff, 1);
-        borderGfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
+        // const borderGfx = this.add.graphics();
+        // borderGfx.lineStyle(3, 0xffffff, 1);
+        // borderGfx.strokeRect(BOARD_X - 2, BOARD_Y - 2, COLS * TILE + 4, ROWS * TILE + 4);
 
         // Score & speed
         this.score = 0;
         this.speedLevel = 1;
         this.scrollSpeed = SCROLL_SPEED * 1.0684**(this.speedLevel - 1);
-        const textX = BOARD_X + COLS * TILE + 8;
+        const textX = BOARD_X + COLS * TILE + 30;
         const textStyle = { fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ffffff', align: 'center', resolution: 5 };
-        this.scoreText = this.add.text(textX, BOARD_Y, 'SCORE\n0', textStyle);
-        this.speedText = this.add.text(textX, BOARD_Y + 30, 'SPEED\n1', textStyle);
+        this.scoreText = this.add.text(textX, BOARD_Y + 10, 'SCORE\n0', textStyle);
+        this.speedText = this.add.text(textX, BOARD_Y + 40, 'SPEED\n1', textStyle);
 
         // Increase speed level every 30 seconds
         // this.time.addEvent({

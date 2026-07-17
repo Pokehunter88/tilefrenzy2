@@ -20,6 +20,7 @@ export class Preloader extends Phaser.Scene {
             bar.width = 4 + (barWidth - 8) * progress;
         });
 
+        this.load.image('background', 'assets/background.png');
         this.load.image('block1', 'assets/block1.png');
         this.load.image('block2', 'assets/block2.png');
         this.load.image('block3', 'assets/block3.png');

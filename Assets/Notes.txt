@@ -10,3 +10,14 @@ triangle : light blue
 heart : red
 circle : green
 square : purple
+
+
+Todo:
+
+Make background
+Fix scoring and add more cases
+Fix speed increase score requirements
+Add more animations
+
+Make start screen
+Make level select screen
