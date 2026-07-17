@@ -28,6 +28,10 @@ export class Preloader extends Phaser.Scene {
         this.load.image('block5', 'assets/block5.png');
         this.load.image('cursor1', 'assets/cursor1.png');
         this.load.image('cursor2', 'assets/cursor2.png');
+        this.load.image('duck1', 'assets/duck1.png');
+        this.load.image('duck2', 'assets/duck2.png');
+        this.load.image('duck3', 'assets/duck3.png');
+        this.load.image('duck4', 'assets/duck4.png');
     }
 
     create() {

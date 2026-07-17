@@ -91,6 +91,27 @@ export class Game extends Phaser.Scene {
             this.spritePool.push(img);
         }
 
+        // Duck character on the right side
+        const duckX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2;
+        const duckY = 220 / 2 + 30;
+        this.duck = this.add.image(duckX, duckY, 'duck1').setOrigin(0.5, 0.5);
+        this.duckCelebrating = false;
+        this.duckIdleFrame = 0;
+        this.time.addEvent({
+            delay: 400,
+            loop: true,
+            callback: () => {
+                if (this.duckCelebrating) return;
+                const stressed = this.getStackHeight() >= 7;
+                if (stressed) {
+                    this.duck.setTexture('duck4');
+                } else {
+                    this.duckIdleFrame = 1 - this.duckIdleFrame;
+                    this.duck.setTexture(this.duckIdleFrame === 0 ? 'duck1' : 'duck2');
+                }
+            }
+        });
+
         // Cursor sprite — image is 80x60 with cursor centred
         this.cursorSprite = this.add.image(0, 0, 'cursor1').setOrigin(0.5, 0.5).setDisplaySize(80, 60);
         this.cursorFrame = 0;
@@ -255,6 +276,7 @@ export class Game extends Phaser.Scene {
         if (toRemove.size === 0) return;
 
         this.clearing = true;
+        this.duckCelebrate();
 
         let scoreToAdd = 0;
 
@@ -384,6 +406,24 @@ export class Game extends Phaser.Scene {
         const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE + TILE / 2 - this.scrollOffset;
         this.cursorSprite.setPosition(cx, cy);
         this.cursorSprite.setVisible(cy >= BOARD_Y && cy <= BOARD_Y + ROWS * TILE);
+    }
+
+    getStackHeight() {
+        for (let r = ROWS - 1; r >= 0; r--) {
+            for (let c = 0; c < COLS; c++) {
+                if (this.grid[r][c]) return r + 1;
+            }
+        }
+        return 0;
+    }
+
+    duckCelebrate() {
+        if (this.duckCelebrating) return;
+        this.duckCelebrating = true;
+        this.duck.setTexture('duck3');
+        this.time.delayedCall(1000, () => {
+            this.duckCelebrating = false;
+        });
     }
 
     update(_time, delta) {
