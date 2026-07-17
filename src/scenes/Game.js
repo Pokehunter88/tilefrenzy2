@@ -93,6 +93,7 @@ export class Game extends Phaser.Scene {
 
         // Two overlay sprites used during swap animation
         this.swapping = false;
+        this.swapCooldown = false;
         this.swapSprite1 = this.add.image(0, 0, 'block1').setOrigin(0, 0).setScale(1).setVisible(false);
         this.swapSprite2 = this.add.image(0, 0, 'block1').setOrigin(0, 0).setScale(1).setVisible(false);
 
@@ -186,7 +187,17 @@ export class Game extends Phaser.Scene {
         kb.on('keydown-A', () => this.moveCursor(-1, 0));
         kb.on('keydown-D', () => this.moveCursor(1, 0));
         kb.on('keydown-SPACE', () => this.doSwap());
-        kb.on('keydown-F', () => { this.scrollOffset += TILE; });
+        this.forcedScrollPixels = 0;
+        this.fHeld = false;
+        this.fRepeatTimer = 0;
+        kb.on('keydown-F', () => {
+            if (!this.fHeld) {
+                this.fHeld = true;
+                this.fRepeatTimer = 200;
+                this.forcedScrollPixels += TILE;
+            }
+        });
+        kb.on('keyup-F', () => { this.fHeld = false; this.fRepeatTimer = 0; });
         kb.on('keydown-E', () => this.changeSpeed(1));
         kb.on('keydown-Q', () => this.changeSpeed(-1));
 
@@ -206,7 +217,7 @@ export class Game extends Phaser.Scene {
     }
 
     doSwap() {
-        if (this.swapping) return;
+        if (this.swapping || this.swapCooldown) return;
         const r = this.cursorRow;
         const c = this.cursorCol;
         const tile1 = this.grid[r][c];
@@ -231,11 +242,12 @@ export class Game extends Phaser.Scene {
         if (tile2) this.swapSprite2.setTexture(tile2.type).setPosition(x2, y).setVisible(true);
 
         this.swapping = true;
+        this.swapCooldown = true;
         this.drawBoard(); // flush pool sprites for the two swapping cells immediately
 
-        this.tweens.add({ targets: this.swapSprite1, x: x2, duration: 80, ease: 'Linear' });
+        this.tweens.add({ targets: this.swapSprite1, x: x2, duration: 60, ease: 'Linear' });
         this.tweens.add({
-            targets: this.swapSprite2, x: x1, duration: 80, ease: 'Linear',
+            targets: this.swapSprite2, x: x1, duration: 60, ease: 'Linear',
             onComplete: () => {
                 // Commit the swap
                 this.grid[r][c] = tile2;
@@ -245,11 +257,11 @@ export class Game extends Phaser.Scene {
                 this.swapSprite1.setVisible(false);
                 this.swapSprite2.setVisible(false);
                 this.swapping = false;
-                // Only drive gravity/matches if nothing else is already doing so;
-                // if falling or clearing is already in progress its onDone will call checkMatches.
+                this.drawBoard(); // redraw immediately so swapped cells never appear blank
                 if (!this.falling && !this.clearing) {
                     this.startGravity(() => this.checkMatches());
                 }
+                this.time.delayedCall(100, () => { this.swapCooldown = false; });
             }
         });
     }
@@ -495,11 +507,28 @@ export class Game extends Phaser.Scene {
     }
 
     update(_time, delta) {
+        // Accumulate forced rows while F is held (300ms initial delay, then one row per 150ms)
+        if (this.fHeld) {
+            this.fRepeatTimer -= delta;
+            if (this.fRepeatTimer <= 0){
+                this.forcedScrollPixels += TILE;
+                this.fRepeatTimer += 200;
+            }
+        }
+
         if (this.clearing || this.falling || this.swapping) {
             this.drawCursor();
             return;
         }
-        this.scrollBoard((this.scrollSpeed / 1000) * delta);
+
+        // Consume forced scroll pixels at 10 tiles/sec on top of normal scroll
+        let extraDelta = 0;
+        if (this.forcedScrollPixels > 0) {
+            extraDelta = Math.min((TILE * 10 / 1000) * delta, this.forcedScrollPixels);
+            this.forcedScrollPixels -= extraDelta;
+        }
+
+        this.scrollBoard((this.scrollSpeed / 1000) * delta + extraDelta);
         this.drawBoard();
     }
 }
