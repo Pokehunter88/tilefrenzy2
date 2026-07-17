@@ -92,23 +92,46 @@ export class Game extends Phaser.Scene {
         }
 
         // Duck character on the right side
-        const duckX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2;
-        const duckY = 220 / 2 + 30;
-        this.duck = this.add.image(duckX, duckY, 'duck1').setOrigin(0.5, 0.5);
+        this.duckBaseX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2;
+        this.duckBaseY = 220 / 2 + 30;
+        this.duck = this.add.image(this.duckBaseX, this.duckBaseY, 'duck1').setOrigin(0.5, 0.5);
         this.duckCelebrating = false;
         this.duckIdleFrame = 0;
+        this.duckStressed = false;
+        this.duckReallyStressed = false;
+
+        // Idle / stressed frame swap
         this.time.addEvent({
             delay: 400,
             loop: true,
             callback: () => {
                 if (this.duckCelebrating) return;
-                const stressed = this.getStackHeight() >= 7;
-                if (stressed) {
+                const height = this.getStackHeight();
+                this.duckStressed = height >= 7;
+                this.duckReallyStressed = height >= 9;
+                if (this.duckStressed) {
                     this.duck.setTexture('duck4');
                 } else {
                     this.duckIdleFrame = 1 - this.duckIdleFrame;
                     this.duck.setTexture(this.duckIdleFrame === 0 ? 'duck1' : 'duck2');
                 }
+            }
+        });
+
+        // Vibration tick
+        this.duckVibTick = 0;
+        this.time.addEvent({
+            delay: 50,
+            loop: true,
+            callback: () => {
+                if (!this.duckReallyStressed || this.duckCelebrating) {
+                    this.duck.setPosition(this.duckBaseX, this.duckBaseY);
+                    return;
+                }
+                this.duckVibTick++;
+                const ox = (this.duckVibTick % 2 === 0) ? 1 : -1;
+                const oy = (this.duckVibTick % 3 === 0) ? 1 : -1;
+                this.duck.setPosition(this.duckBaseX + ox, this.duckBaseY + oy);
             }
         });
 
