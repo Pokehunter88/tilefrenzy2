@@ -36,6 +36,7 @@
             image-rendering: crisp-edges !important;
         }
 
+        /* JS sets display:flex/none — CSS just provides the base layout */
         #touch-controls {
             display: none;
             position: fixed;
@@ -47,12 +48,20 @@
             padding: 20px;
             z-index: 100;
             pointer-events: none;
-
             opacity: 50%;
         }
 
-        @media (pointer: coarse) {
-            #touch-controls { display: flex; }
+        #toggle-controls {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 101;
+            cursor: pointer;
+            width: 70px;
+            height: 40px;
+            -webkit-tap-highlight-color: transparent;
+            image-rendering: pixelated;
+            opacity: 50%;
         }
 
         #dpad {
@@ -69,7 +78,6 @@
             image-rendering: pixelated;
         }
 
-        /* Invisible triangular touch zones over each quadrant */
         .dpad-zone {
             position: absolute;
             top: 0; left: 0;
@@ -127,11 +135,29 @@
         </div>
     </div>
 
+    <img id="toggle-controls" src="assets/eye1.png" />
+
     <script>
-        const held = {};
-        let activeDirs = 0;
-        const dpadImg  = document.getElementById('dpad-img');
-        const swapImg  = document.getElementById('swap-img');
+        const controls  = document.getElementById('touch-controls');
+        const toggleBtn = document.getElementById('toggle-controls');
+        const dpadImg   = document.getElementById('dpad-img');
+        const swapImg   = document.getElementById('swap-img');
+        const held      = {};
+        let activeDirs  = 0;
+
+        // Default: on for mobile (coarse pointer), off for PC
+        let controlsVisible = window.matchMedia('(pointer: coarse)').matches;
+
+        function applyVisibility() {
+            controls.style.display  = controlsVisible ? 'flex' : 'none';
+            toggleBtn.src = controlsVisible ? 'assets/eye2.png' : 'assets/eye1.png';
+        }
+        applyVisibility();
+
+        toggleBtn.addEventListener('click', () => {
+            controlsVisible = !controlsVisible;
+            applyVisibility();
+        });
 
         function startHold(id, fn) {
             if (held[id]) return;
@@ -146,20 +172,24 @@
 
         function dpad(id, dc, dr, pressedSrc) {
             const el = document.getElementById(id);
-            el.addEventListener('touchstart', (e) => {
+            const press = (e) => {
                 e.preventDefault();
                 activeDirs++;
                 dpadImg.src = pressedSrc;
                 startHold(id, () => window.tileGame?.moveCursor(dc, dr));
-            }, { passive: false });
+            };
             const release = (e) => {
                 if (e) e.preventDefault();
                 stopHold(id);
                 activeDirs = Math.max(0, activeDirs - 1);
                 if (activeDirs === 0) dpadImg.src = 'assets/dpad1.png';
             };
+            el.addEventListener('touchstart',  press,   { passive: false });
             el.addEventListener('touchend',    release, { passive: false });
             el.addEventListener('touchcancel', release);
+            el.addEventListener('mousedown',   press);
+            el.addEventListener('mouseup',     release);
+            el.addEventListener('mouseleave',  release);
         }
 
         dpad('btn-up',    0,  1, 'assets/dpad2.png');
@@ -168,17 +198,21 @@
         dpad('btn-left', -1,  0, 'assets/dpad5.png');
 
         const swapEl = document.getElementById('btn-swap');
-        swapEl.addEventListener('touchstart', (e) => {
+        const swapPress = (e) => {
             e.preventDefault();
             swapImg.src = 'assets/swap2.png';
             window.tileGame?.doSwap();
-        }, { passive: false });
+        };
         const swapRelease = (e) => {
             if (e) e.preventDefault();
             swapImg.src = 'assets/swap1.png';
         };
+        swapEl.addEventListener('touchstart',  swapPress,   { passive: false });
         swapEl.addEventListener('touchend',    swapRelease, { passive: false });
         swapEl.addEventListener('touchcancel', swapRelease);
+        swapEl.addEventListener('mousedown',   swapPress);
+        swapEl.addEventListener('mouseup',     swapRelease);
+        swapEl.addEventListener('mouseleave',  swapRelease);
     </script>
 
     <script type="module" src="./main.js"></script>
