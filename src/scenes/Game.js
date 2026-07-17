@@ -23,6 +23,24 @@ function randomBlock(rng) {
     return BLOCK_TYPES[Math.floor(rng() * BLOCK_TYPES.length)];
 }
 
+function weightedBlock(rng, neighbors) {
+    // Count how many neighbors have each type
+    const counts = {};
+    for (const t of BLOCK_TYPES) counts[t] = 0;
+    for (const n of neighbors) {
+        if (n?.type) counts[n.type] += 4;
+    }
+    // Each neighbor occurrence halves the weight of that type
+    const weights = BLOCK_TYPES.map(t => Math.pow(0.25, counts[t]));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let pick = rng() * total;
+    for (let i = 0; i < BLOCK_TYPES.length; i++) {
+        pick -= weights[i];
+        if (pick <= 0) return BLOCK_TYPES[i];
+    }
+    return BLOCK_TYPES[BLOCK_TYPES.length - 1];
+}
+
 export class Game extends Phaser.Scene {
     constructor() {
         super('Game');
@@ -35,24 +53,21 @@ export class Game extends Phaser.Scene {
         for (let r = 0; r < ROWS + 2; r++) {
             this.grid[r] = Array(COLS).fill(null);
         }
-        for (let r = 0; r < 5; r++) {
+        for (let r = 0; r < 6; r++) {
             for (let c = 0; c < COLS; c++) {
-                let type;
-                let attempts = 0;
-                do {
-                    type = randomBlock(this.rng);
-                    attempts++;
-                } while (attempts < 100 && (
-                    // Check horizontal: two to the left match
-                    (c >= 2 && this.grid[r][c-1]?.type === type && this.grid[r][c-2]?.type === type) ||
-                    // Check vertical: two below match
-                    (r >= 2 && this.grid[r-1][c]?.type === type && this.grid[r-2][c]?.type === type)
-                ));
-                this.grid[r][c] = { type };
+                const neighbors = [
+                    this.grid[r][c - 1],
+                    this.grid[r][c + 1],
+                    this.grid[r - 1]?.[c],
+                    this.grid[r + 1]?.[c],
+                ];
+                this.grid[r][c] = { type: weightedBlock(this.rng, neighbors) };
             }
         }
 
-        this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
+        this.nextRow = Array.from({ length: COLS }, (_, c) => ({
+            type: weightedBlock(this.rng, [this.grid[0][c], this.nextRow?.[c - 1]])
+        }));
         this.scrollOffset = 0;
         this.clearing = false;
         this.falling = false;
@@ -196,7 +211,12 @@ export class Game extends Phaser.Scene {
             this.grid[r] = this.grid[r - 1];
         }
         this.grid[0] = this.nextRow;
-        this.nextRow = Array.from({ length: COLS }, () => ({ type: randomBlock(this.rng) }));
+        const newRow = [];
+        for (let c = 0; c < COLS; c++) {
+            const neighbors = [this.grid[0][c], newRow[c - 1]];
+            newRow.push({ type: weightedBlock(this.rng, neighbors) });
+        }
+        this.nextRow = newRow;
         if (this.cursorRow < ROWS - 2) this.cursorRow++;
         if (!this.clearing) this.checkMatches();
     }
@@ -353,15 +373,22 @@ export class Game extends Phaser.Scene {
             this.spritePool[spriteIdx].setVisible(false);
         }
 
+        this.drawCursor();
+    }
+
+    drawCursor() {
         // Cursor — centre of the two tiles the cursor spans
         const cx = BOARD_X + this.cursorCol * TILE + TILE;
-        const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE + TILE / 2 - off;
+        const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE + TILE / 2 - this.scrollOffset;
         this.cursorSprite.setPosition(cx, cy);
-        this.cursorSprite.setVisible(cy >= boardTop && cy <= boardBottom);
+        this.cursorSprite.setVisible(cy >= BOARD_Y && cy <= BOARD_Y + ROWS * TILE);
     }
 
     update(_time, delta) {
-        if (this.clearing || this.falling) return;
+        if (this.clearing || this.falling) {
+            this.drawCursor();
+            return;
+        }
         this.scrollBoard((this.scrollSpeed / 1000) * delta);
         this.drawBoard();
     }
