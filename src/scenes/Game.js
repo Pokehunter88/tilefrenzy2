@@ -55,7 +55,7 @@ export class Game extends Phaser.Scene {
         for (let r = 0; r < ROWS + 2; r++) {
             this.grid[r] = Array(COLS).fill(null);
         }
-        for (let r = 0; r < 6; r++) {
+        for (let r = 0; r < 5; r++) {
             for (let c = 0; c < COLS; c++) {
                 const neighbors = [
                     this.grid[r][c - 1],
@@ -90,6 +90,11 @@ export class Game extends Phaser.Scene {
             this.tileContainer.add(img);
             this.spritePool.push(img);
         }
+
+        // Two overlay sprites used during swap animation
+        this.swapping = false;
+        this.swapSprite1 = this.add.image(0, 0, 'block1').setOrigin(0, 0).setScale(1).setVisible(false);
+        this.swapSprite2 = this.add.image(0, 0, 'block1').setOrigin(0, 0).setScale(1).setVisible(false);
 
         // Duck character on the right side
         this.duckBaseX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2;
@@ -201,13 +206,52 @@ export class Game extends Phaser.Scene {
     }
 
     doSwap() {
-        if (this.clearing || this.falling) return;
+        if (this.swapping) return;
         const r = this.cursorRow;
         const c = this.cursorCol;
-        const tmp = this.grid[r][c];
-        this.grid[r][c] = this.grid[r][c + 1];
-        this.grid[r][c + 1] = tmp;
-        this.startGravity(() => this.checkMatches());
+        const tile1 = this.grid[r][c];
+        const tile2 = this.grid[r][c + 1];
+
+        // Can't swap blocks that are flashing (mid-clear)
+        if (tile1?._removing || tile2?._removing) return;
+
+        // Can't swap a block that has no support below it (mid-fall)
+        if (tile1 && r > 0 && !this.grid[r - 1][c]) return;
+        if (tile2 && r > 0 && !this.grid[r - 1][c + 1]) return;
+
+        const x1 = BOARD_X + c * TILE;
+        const x2 = BOARD_X + (c + 1) * TILE;
+        const y  = BOARD_Y + (ROWS - 1 - r) * TILE - this.scrollOffset;
+
+        // Mark grid cells as mid-swap so drawBoard skips them
+        if (tile1) tile1._swapping = true;
+        if (tile2) tile2._swapping = true;
+
+        if (tile1) this.swapSprite1.setTexture(tile1.type).setPosition(x1, y).setVisible(true);
+        if (tile2) this.swapSprite2.setTexture(tile2.type).setPosition(x2, y).setVisible(true);
+
+        this.swapping = true;
+        this.drawBoard(); // flush pool sprites for the two swapping cells immediately
+
+        this.tweens.add({ targets: this.swapSprite1, x: x2, duration: 80, ease: 'Linear' });
+        this.tweens.add({
+            targets: this.swapSprite2, x: x1, duration: 80, ease: 'Linear',
+            onComplete: () => {
+                // Commit the swap
+                this.grid[r][c] = tile2;
+                this.grid[r][c + 1] = tile1;
+                if (tile1) delete tile1._swapping;
+                if (tile2) delete tile2._swapping;
+                this.swapSprite1.setVisible(false);
+                this.swapSprite2.setVisible(false);
+                this.swapping = false;
+                // Only drive gravity/matches if nothing else is already doing so;
+                // if falling or clearing is already in progress its onDone will call checkMatches.
+                if (!this.falling && !this.clearing) {
+                    this.startGravity(() => this.checkMatches());
+                }
+            }
+        });
     }
 
     // Returns true if any block moved down one row
@@ -325,6 +369,7 @@ export class Game extends Phaser.Scene {
         flashKeys.forEach(key => {
             const [r, c] = key.split(',').map(Number);
             if (this.grid[r][c]) this.grid[r][c]._flash = true;
+            if (this.grid[r][c]) this.grid[r][c]._removing = true;
         });
         this.drawBoard();
 
@@ -408,7 +453,7 @@ export class Game extends Phaser.Scene {
             for (let c = 0; c < COLS; c++) {
                 const tile = this.grid[r][c];
                 const img = this.spritePool[spriteIdx++];
-                if (!tile) { img.setVisible(false); continue; }
+                if (!tile || tile._swapping) { img.setVisible(false); continue; }
                 const px = BOARD_X + c * TILE;
                 const py = BOARD_Y + (ROWS - 1 - r) * TILE - off;
                 place(img, px, py, tile.type, tile._flash);
@@ -450,7 +495,7 @@ export class Game extends Phaser.Scene {
     }
 
     update(_time, delta) {
-        if (this.clearing || this.falling) {
+        if (this.clearing || this.falling || this.swapping) {
             this.drawCursor();
             return;
         }
