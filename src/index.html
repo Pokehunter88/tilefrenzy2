@@ -14,7 +14,8 @@
             height: 100vh;
             margin: 0;
             padding: 0;
-            background: #000;
+            background: #1a1640;
+            /* background: #7b7b7c; */
             overflow: hidden;
             touch-action: manipulation;
             user-select: none;
@@ -26,7 +27,7 @@
 
         #game-container {
             width: 100vw;
-            height: 100vh;
+            height: 95vh;
             align-items: center;
             justify-content: center;
         }
@@ -62,6 +63,29 @@
             -webkit-tap-highlight-color: transparent;
             image-rendering: pixelated;
             opacity: 50%;
+        }
+
+        #dpad-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: left;
+            gap: 8px;
+            pointer-events: all;
+        }
+
+        #btn-ff {
+            width: 120px;
+            cursor: pointer;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            image-rendering: pixelated;
+        }
+
+        #ff-img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
         }
 
         #dpad {
@@ -121,12 +145,17 @@
     <div id="game-container"></div>
 
     <div id="touch-controls">
-        <div id="dpad">
-            <img id="dpad-img" src="assets/dpad1.png" />
-            <div class="dpad-zone" id="btn-up"></div>
-            <div class="dpad-zone" id="btn-down"></div>
-            <div class="dpad-zone" id="btn-left"></div>
-            <div class="dpad-zone" id="btn-right"></div>
+        <div id="dpad-wrapper">
+            <div id="btn-ff">
+                <img id="ff-img" src="assets/fastforward1.png" />
+            </div>
+            <div id="dpad">
+                <img id="dpad-img" src="assets/dpad1.png" />
+                <div class="dpad-zone" id="btn-up"></div>
+                <div class="dpad-zone" id="btn-down"></div>
+                <div class="dpad-zone" id="btn-left"></div>
+                <div class="dpad-zone" id="btn-right"></div>
+            </div>
         </div>
         <div id="action-btns">
             <div id="btn-swap">
@@ -191,6 +220,30 @@
             el.addEventListener('mouseup',     release);
             el.addEventListener('mouseleave',  release);
         }
+
+        const ffEl = document.getElementById('btn-ff');
+        const ffImg = document.getElementById('ff-img');
+        const ffPress = (e) => {
+            e.preventDefault();
+            ffImg.src = 'assets/fastforward2.png';
+            const g = window.tileGame;
+            if (g && !g.fHeld) {
+                g.fHeld = true;
+                g.fRepeatTimer = 200;
+                g.forcedScrollPixels += 20;
+            }
+        };
+        const ffRelease = () => {
+            ffImg.src = 'assets/fastforward1.png';
+            const g = window.tileGame;
+            if (g) { g.fHeld = false; g.fRepeatTimer = 0; }
+        };
+        ffEl.addEventListener('touchstart',  ffPress,   { passive: false });
+        ffEl.addEventListener('touchend',    ffRelease, { passive: false });
+        ffEl.addEventListener('touchcancel', ffRelease);
+        ffEl.addEventListener('mousedown',   ffPress);
+        ffEl.addEventListener('mouseup',     ffRelease);
+        ffEl.addEventListener('mouseleave',  ffRelease);
 
         dpad('btn-up',    0,  1, 'assets/dpad2.png');
         dpad('btn-right', 1,  0, 'assets/dpad3.png');

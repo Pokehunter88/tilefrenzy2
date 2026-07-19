@@ -12,6 +12,7 @@ heart : red
 circle : green
 square : purple
 
+17 = 2940
 
 Todo:
 

@@ -7,7 +7,7 @@ const BLOCK_TYPES = ['block1', 'block2', 'block3', 'block4', 'block5'];
 const SCROLL_SPEED = 1.33; // pixels per second
 
 const BOARD_X = Math.floor((430 - COLS * TILE) / 2);
-const BOARD_Y = Math.floor((220 - ROWS * TILE) / 2);
+const BOARD_Y = Math.floor((220 - ROWS * TILE) / 2) + 9;
 
 function makeRng(seed) {
     let s = seed;
@@ -98,8 +98,8 @@ export class Game extends Phaser.Scene {
         this.swapSprite2 = this.add.image(0, 0, 'block1').setOrigin(0, 0).setScale(1).setVisible(false);
 
         // Duck character on the right side
-        this.duckBaseX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2;
-        this.duckBaseY = 220 / 2 + 30;
+        this.duckBaseX = BOARD_X + COLS * TILE + (430 - BOARD_X - COLS * TILE) / 2 - 20;
+        this.duckBaseY = 220 / 2 + 10;
         this.duck = this.add.image(this.duckBaseX, this.duckBaseY, 'duck1').setOrigin(0.5, 0.5);
         this.duckCelebrating = false;
         this.duckIdleFrame = 0;
