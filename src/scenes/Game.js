@@ -73,6 +73,8 @@ export class Game extends Phaser.Scene {
         this.scrollOffset = 0;
         this.clearing = false;
         this.falling = false;
+        this.gameOver = false;
+        this.gameRestart = false;
         this.cursorCol = 2;
         this.cursorRow = 3;
 
@@ -111,7 +113,7 @@ export class Game extends Phaser.Scene {
             delay: 400,
             loop: true,
             callback: () => {
-                if (this.duckCelebrating) return;
+                if (this.duckCelebrating || this.gameOver) return;
                 const height = this.getStackHeight();
                 this.duckStressed = height >= 7;
                 this.duckReallyStressed = height >= 9;
@@ -130,7 +132,7 @@ export class Game extends Phaser.Scene {
             delay: 50,
             loop: true,
             callback: () => {
-                if (!this.duckReallyStressed || this.duckCelebrating) {
+                if (!this.duckReallyStressed || this.duckCelebrating || this.gameOver) {
                     this.duck.setPosition(this.duckBaseX, this.duckBaseY);
                     return;
                 }
@@ -214,12 +216,17 @@ export class Game extends Phaser.Scene {
     }
 
     moveCursor(dc, dr) {
+        if (this.gameOver) return;
         this.cursorCol = Phaser.Math.Clamp(this.cursorCol + dc, 0, COLS - 2);
         this.cursorRow = Phaser.Math.Clamp(this.cursorRow + dr, 0, ROWS - 2);
     }
 
     doSwap() {
-        if (this.swapping || this.swapCooldown) return;
+        if (this.gameRestart) {
+            this.scene.restart()
+            return;
+        }
+        if (this.swapping || this.swapCooldown || this.gameOver) return;
         const r = this.cursorRow;
         const c = this.cursorCol;
         const tile1 = this.grid[r][c];
@@ -305,6 +312,10 @@ export class Game extends Phaser.Scene {
     scrollBoard(delta) {
         this.scrollOffset += delta;
         while (this.scrollOffset >= TILE) {
+            if (this.grid[ROWS - 2].some(t => t !== null)) {
+                this.triggerGameOver();
+                return;
+            }
             this.scrollOffset -= TILE;
             this.shiftGridUp();
         }
@@ -323,6 +334,45 @@ export class Game extends Phaser.Scene {
         this.nextRow = newRow;
         if (this.cursorRow < ROWS - 2) this.cursorRow++;
         if (!this.clearing) this.checkMatches();
+    }
+
+    triggerGameOver() {
+        if (this.gameOver) return;
+        this.gameOver = true;
+        this.clearing = false;
+        this.falling = false;
+        this.swapping = false;
+        this.cursorSprite.setVisible(false);
+        this.duck.setTexture('duck5');
+        this.drawBoard();
+
+        // Wipe rows top-to-bottom, then show text
+        let row = ROWS - 1;
+        const wipeNext = () => {
+            if (row >= 0) {
+                this.grid[row] = Array(COLS).fill(null);
+            } else {
+                this.nextRow = Array(COLS).fill(null);
+                this.drawBoard();
+                this.showGameOverText();
+                return;
+            }
+            this.drawBoard();
+            row--;
+            this.time.delayedCall(80, wipeNext);
+        };
+        this.time.delayedCall(500, wipeNext);
+    }
+
+    showGameOverText() {
+        const cx = BOARD_X + (COLS * TILE) / 2;
+        const cy = BOARD_Y + (ROWS * TILE) / 2;
+        const textStyle = { fontFamily: '"Press Start 2P"', fontSize: '20px', color: '#ff4444', align: 'center', resolution: 5 };
+        this.add.text(cx, cy - 10, 'GAME\nOVER', textStyle).setOrigin(0.5, 0.5);
+        const restartStyle = { fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ffffff', align: 'center', resolution: 5 };
+        this.add.text(cx, cy + 28, 'SPACE\nto restart', restartStyle).setOrigin(0.5, 0.5);
+        this.input.keyboard.once('keydown-SPACE', () => this.scene.restart());
+        this.gameRestart = true;
     }
 
     checkMatches() {
@@ -459,6 +509,7 @@ export class Game extends Phaser.Scene {
             const tile = this.nextRow[c];
             const px = BOARD_X + c * TILE;
             const py = BOARD_Y + ROWS * TILE - off;
+            if (!tile) { this.spritePool[spriteIdx++].setVisible(false); continue; }
             place(this.spritePool[spriteIdx++], px, py, tile.type, false);
         }
 
@@ -483,6 +534,7 @@ export class Game extends Phaser.Scene {
     }
 
     drawCursor() {
+        if (this.gameOver) return;
         // Cursor — centre of the two tiles the cursor spans
         const cx = BOARD_X + this.cursorCol * TILE + TILE;
         const cy = BOARD_Y + (ROWS - 1 - this.cursorRow) * TILE + TILE / 2 - this.scrollOffset;
@@ -500,7 +552,7 @@ export class Game extends Phaser.Scene {
     }
 
     duckCelebrate() {
-        if (this.duckCelebrating) return;
+        if (this.duckCelebrating || this.gameOver) return;
         this.duckCelebrating = true;
         this.duck.setTexture('duck3');
         this.time.delayedCall(1000, () => {
@@ -517,6 +569,8 @@ export class Game extends Phaser.Scene {
                 this.fRepeatTimer += 200;
             }
         }
+
+        if (this.gameOver) return;
 
         if (this.clearing || this.falling || this.swapping) {
             this.drawCursor();
