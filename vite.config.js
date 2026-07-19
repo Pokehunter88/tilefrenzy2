@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+    base: '/tilefrenzy2/',
     root: 'src',
     publicDir: '../public',
     server: {
