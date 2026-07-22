@@ -267,7 +267,10 @@ export class Game extends Phaser.Scene {
                 this.swapSprite2.setVisible(false);
                 this.swapping = false;
                 this.drawBoard(); // redraw immediately so swapped cells never appear blank
-                if (!this.falling && !this.clearing) {
+                if (this.clearing && this._mergeIntoClear) {
+                    this._mergeIntoClear(true);
+                    this.drawBoard();
+                } else if (!this.falling && !this.clearing) {
                     this.startGravity(() => this.checkMatches());
                 }
                 this.time.delayedCall(100, () => { this.swapCooldown = false; });
@@ -281,9 +284,11 @@ export class Game extends Phaser.Scene {
         // Iterate from row 1 upward so blocks cascade naturally
         for (let r = 1; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                if (this.grid[r][c] && !this.grid[r - 1][c]) {
+                const tile = this.grid[r][c];
+                // Don't move tiles that are mid-clear (flashing/removing)
+                if (tile && !tile._removing && !this.grid[r - 1][c]) {
                     if (dontMove) return true;
-                    this.grid[r - 1][c] = this.grid[r][c];
+                    this.grid[r - 1][c] = tile;
                     this.grid[r][c] = null;
                     moved = true;
                 }
@@ -375,14 +380,14 @@ export class Game extends Phaser.Scene {
         this.gameRestart = true;
     }
 
-    checkMatches() {
+    findMatches() {
         const toRemove = new Set();
 
         for (let r = 0; r < ROWS; r++) {
             let run = 1;
             for (let c = 1; c < COLS; c++) {
                 const a = this.grid[r][c - 1], b = this.grid[r][c];
-                if (a && b && a.type === b.type) { run++; }
+                if (a && b && a.type === b.type && !a._removing && !b._removing) { run++; }
                 else {
                     if (run >= 3) for (let i = c - run; i < c; i++) toRemove.add(`${r},${i}`);
                     run = 1;
@@ -395,7 +400,7 @@ export class Game extends Phaser.Scene {
             let run = 1;
             for (let r = 1; r < ROWS; r++) {
                 const a = this.grid[r - 1][c], b = this.grid[r][c];
-                if (a && b && a.type === b.type) { run++; }
+                if (a && b && a.type === b.type && !a._removing && !b._removing) { run++; }
                 else {
                     if (run >= 3) for (let i = r - run; i < r; i++) toRemove.add(`${i},${c}`);
                     run = 1;
@@ -404,40 +409,47 @@ export class Game extends Phaser.Scene {
             if (run >= 3) for (let i = ROWS - run; i < ROWS; i++) toRemove.add(`${i},${c}`);
         }
 
+        return toRemove;
+    }
+
+    checkMatches() {
+        const toRemove = this.findMatches();
         if (toRemove.size === 0) return;
 
         this.clearing = true;
         this.duckCelebrate();
 
         let scoreToAdd = 0;
-
-        if (toRemove.size == 4) {
-            scoreToAdd = 20;
-        } else if (toRemove.size == 5) {
-            scoreToAdd = 40;
-        } else if (toRemove.size == 6) {
-            scoreToAdd = 50;
-        }
-
+        if (toRemove.size == 4) scoreToAdd = 20;
+        else if (toRemove.size == 5) scoreToAdd = 40;
+        else if (toRemove.size == 6) scoreToAdd = 50;
         this.score += toRemove.size * 10 + scoreToAdd;
-
         this.scoreText.setText(`SCORE\n${this.score}`);
-
-        if (this.score / 100 >= this.speedLevel) {
-            this.changeSpeed(1);
-        }
+        if (this.score / 100 >= this.speedLevel) this.changeSpeed(1);
 
         const flashKeys = [...toRemove];
 
-        // Mark all as flashing
-        flashKeys.forEach(key => {
+        const markRemoving = (key, flashState) => {
             const [r, c] = key.split(',').map(Number);
-            if (this.grid[r][c]) this.grid[r][c]._flash = true;
-            if (this.grid[r][c]) this.grid[r][c]._removing = true;
-        });
+            if (this.grid[r][c]) { this.grid[r][c]._flash = flashState; this.grid[r][c]._removing = true; }
+        };
+
+        flashKeys.forEach(k => markRemoving(k, true));
         this.drawBoard();
 
-        // Flicker phase
+        const mergeNewMatches = (flashState) => {
+            this.findMatches().forEach(key => {
+                if (flashKeys.includes(key)) return;
+                flashKeys.push(key);
+                markRemoving(key, flashState);
+                this.score += 10;
+                this.scoreText.setText(`SCORE\n${this.score}`);
+            });
+        };
+
+        // Expose so doSwap can trigger a merge immediately on swap completion
+        this._mergeIntoClear = mergeNewMatches;
+
         let flashOn = true;
         let ticks = 0;
         const totalTicks = 8;
@@ -449,23 +461,26 @@ export class Game extends Phaser.Scene {
                 const [r, c] = key.split(',').map(Number);
                 if (this.grid[r][c]) this.grid[r][c]._flash = flashOn;
             });
+            mergeNewMatches(flashOn);
             this.drawBoard();
             if (ticks < totalTicks) {
                 this.time.delayedCall(50, doFlash);
             } else {
-                // Make sure all are flashing white before pop phase
                 flashKeys.forEach(key => {
                     const [r, c] = key.split(',').map(Number);
                     if (this.grid[r][c]) this.grid[r][c]._flash = true;
                 });
+                mergeNewMatches(true);
                 this.drawBoard();
                 this.time.delayedCall(300, doPopping);
             }
         };
 
-        // Pop phase — remove one block at a time
         const doPopping = () => {
+            // Pick up any matches formed since the last check (e.g. mid-pop swap)
+            mergeNewMatches(true);
             if (flashKeys.length === 0) {
+                this._mergeIntoClear = null;
                 this.clearing = false;
                 this.startGravity(() => this.checkMatches());
                 return;
@@ -473,6 +488,8 @@ export class Game extends Phaser.Scene {
             const key = flashKeys.shift();
             const [r, c] = key.split(',').map(Number);
             this.grid[r][c] = null;
+            // Settle non-removing blocks into the gap immediately
+            while (this.gravityStep()) {}
             this.drawBoard();
             this.time.delayedCall(100, doPopping);
         };
